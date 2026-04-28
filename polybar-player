@@ -79,6 +79,7 @@ parse_args() {
             _discover)         discover_players; exit 0 ;;
             _active_player)    active_player; exit 0 ;;
             _set_active)       set_active "$2"; exit 0 ;;
+            _scroll_text)      scroll_text "$2" "$3" "$4" "$5"; exit 0 ;;
             *)                 echo "polybar-player: unknown option: $1" >&2; exit 1 ;;
         esac
     done
@@ -145,6 +146,45 @@ active_player() {
 set_active() {
     mkdir -p "$STATE_DIR"
     printf '%s\n' "$1" > "$STATE_DIR/active"
+}
+
+# scroll_text TEXT MAX_LENGTH SPEED SEPARATOR
+# Returns a sliding window of TEXT. Maintains offset in state file.
+# If TEXT fits in MAX_LENGTH, returns it unchanged.
+scroll_text() {
+    local text="$1" max_len="$2" speed="$3" sep="$4"
+
+    # If it fits, no scrolling needed
+    if [[ ${#text} -le $max_len ]]; then
+        printf '%s' "$text"
+        return 0
+    fi
+
+    mkdir -p "$STATE_DIR"
+    local offset_file="$STATE_DIR/scroll-offset"
+
+    # Read current offset
+    local offset=0
+    if [[ -f "$offset_file" ]]; then
+        offset=$(cat "$offset_file")
+        # Validate it's a number
+        [[ "$offset" =~ ^[0-9]+$ ]] || offset=0
+    fi
+
+    # Build the scrolling buffer: text + separator + text (for seamless wrap)
+    local buffer="${text}${sep}${text}${sep}"
+    local buf_cycle_len=$(( ${#text} + ${#sep} ))
+
+    # Normalize offset within cycle
+    offset=$(( offset % buf_cycle_len ))
+
+    # Extract window
+    local window="${buffer:$offset:$max_len}"
+    printf '%s' "$window"
+
+    # Advance offset for next call
+    local next_offset=$(( offset + speed ))
+    printf '%d' "$next_offset" > "$offset_file"
 }
 
 # Stubs — implemented in subsequent tasks
