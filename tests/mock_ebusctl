@@ -2,7 +2,7 @@
 # Mock ebusctl for testing polybar-player.
 set -euo pipefail
 
-: "${MOCK_PLAYERS:=org.mpris.MediaPlayer2.spotify
+MOCK_PLAYERS="${MOCK_PLAYERS-org.mpris.MediaPlayer2.spotify
 org.mpris.MediaPlayer2.firefox.instance_1234}"
 : "${MOCK_STATUS:=Playing}"
 : "${MOCK_TITLE:=Never Gonna Give You Up}"

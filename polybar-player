@@ -76,6 +76,9 @@ parse_args() {
             --select)          action="select"; shift ;;
             -h|--help)         usage; exit 0 ;;
             --version)         echo "polybar-player $VERSION"; exit 0 ;;
+            _discover)         discover_players; exit 0 ;;
+            _active_player)    active_player; exit 0 ;;
+            _set_active)       set_active "$2"; exit 0 ;;
             *)                 echo "polybar-player: unknown option: $1" >&2; exit 1 ;;
         esac
     done
@@ -85,6 +88,63 @@ parse_args() {
         select)               select_player; exit 0 ;;
         "")                   display_output ;;
     esac
+}
+
+# discover_players — list MPRIS2 player service names, one per line
+discover_players() {
+    "$DBUS_CLI" list --acquired 2>/dev/null \
+        | grep '^org\.mpris\.MediaPlayer2\.' \
+        || true
+}
+
+# active_player — return the service name of the active player
+active_player() {
+    mkdir -p "$STATE_DIR"
+    local players
+    players=$(discover_players)
+    [[ -z "$players" ]] && return 1
+
+    # If user forced a player, use it
+    if [[ -n "$FORCE_PLAYER" ]]; then
+        if printf '%s\n' "$players" | grep -qxF "$FORCE_PLAYER"; then
+            printf '%s\n' "$FORCE_PLAYER"
+            return 0
+        fi
+        echo "polybar-player: forced player $FORCE_PLAYER not found" >&2
+        return 1
+    fi
+
+    # Check persisted selection
+    local state_file="$STATE_DIR/active"
+    if [[ -f "$state_file" ]]; then
+        local saved
+        saved=$(cat "$state_file")
+        if printf '%s\n' "$players" | grep -qxF "$saved"; then
+            printf '%s\n' "$saved"
+            return 0
+        fi
+    fi
+
+    # Prefer the player that's currently Playing
+    local p
+    while IFS= read -r p; do
+        local status
+        status=$("$DBUS_CLI" get-property "$p" /org/mpris/MediaPlayer2 \
+            org.mpris.MediaPlayer2.Player PlaybackStatus 2>/dev/null) || continue
+        if [[ "$status" == *'"Playing"'* ]]; then
+            printf '%s\n' "$p"
+            return 0
+        fi
+    done <<< "$players"
+
+    # Fall back to first
+    printf '%s\n' "$players" | head -1
+}
+
+# set_active PLAYER_SERVICE — persist player selection
+set_active() {
+    mkdir -p "$STATE_DIR"
+    printf '%s\n' "$1" > "$STATE_DIR/active"
 }
 
 # Stubs — implemented in subsequent tasks
