@@ -4,14 +4,16 @@ set -euo pipefail
 
 VERSION="0.1.0"
 
-# Detect D-Bus CLI tool: busctl (real) > ebusctl (shim)
+# Detect D-Bus CLI tool: ebusctl (shim) > busctl (systemd)
+# Prefer ebusctl — its output format is guaranteed compatible.
+# busctl (systemd) has different output formatting that may not parse correctly.
 DBUS_CLI=""
-if command -v busctl &>/dev/null; then
-    DBUS_CLI="busctl"
-elif command -v ebusctl &>/dev/null; then
+if command -v ebusctl &>/dev/null; then
     DBUS_CLI="ebusctl"
+elif command -v busctl &>/dev/null; then
+    DBUS_CLI="busctl"
 else
-    echo "polybar-player: requires busctl or ebusctl in PATH" >&2
+    echo "polybar-player: requires ebusctl or busctl in PATH" >&2
     exit 1
 fi
 
@@ -218,6 +220,7 @@ get_metadata() {
     METADATA_TITLE=""
     METADATA_ARTIST=""
     METADATA_ALBUM=""
+    local metadata_url=""
 
     while IFS= read -r line; do
         case "$line" in
@@ -230,8 +233,19 @@ get_metadata() {
             *'"xesam:album"'*)
                 METADATA_ALBUM=$(printf '%s' "$line" | sed 's/.*s "\(.*\)"/\1/')
                 ;;
+            *'"xesam:url"'*)
+                metadata_url=$(printf '%s' "$line" | sed 's/.*s "\(.*\)"/\1/')
+                ;;
         esac
     done <<< "$raw"
+
+    # Fallback: if no title, extract filename from URL
+    if [[ -z "$METADATA_TITLE" && -n "$metadata_url" ]]; then
+        # Decode file:///path/to/file.mp3 -> file.mp3
+        METADATA_TITLE="${metadata_url##*/}"
+        # URL-decode %20 etc.
+        METADATA_TITLE=$(printf '%b' "${METADATA_TITLE//%/\\x}")
+    fi
 }
 
 # get_playback_status SERVICE
@@ -303,8 +317,16 @@ format_output() {
         pp_icon="$ICON_PLAY"
     fi
 
+    # Clean up format when artist/title are empty to avoid dangling separators
     local output="$FORMAT"
-    output="${output//\{artist\}/$display_artist}"
+    if [[ -z "$display_artist" ]]; then
+        # Remove "{artist}: " or "{artist} - " patterns (common separators)
+        output="${output//\{artist\}: /}"
+        output="${output//\{artist\} - /}"
+        output="${output//\{artist\}/}"
+    else
+        output="${output//\{artist\}/$display_artist}"
+    fi
     output="${output//\{title\}/$display_title}"
     output="${output//\{album\}/$METADATA_ALBUM}"
     output="${output//\{status\}/$status}"
