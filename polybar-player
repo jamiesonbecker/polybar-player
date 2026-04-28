@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# polybar-player — MPRIS2 media control for polybar
+set -euo pipefail
+
+VERSION="0.1.0"
+
+# Detect D-Bus CLI tool: busctl (real) > ebusctl (shim)
+DBUS_CLI=""
+if command -v busctl &>/dev/null; then
+    DBUS_CLI="busctl"
+elif command -v ebusctl &>/dev/null; then
+    DBUS_CLI="ebusctl"
+else
+    echo "polybar-player: requires busctl or ebusctl in PATH" >&2
+    exit 1
+fi
+
+# Defaults
+FORMAT='{prev} {icon} {artist}: {title} {play_pause} {next}'
+MAX_LENGTH=30
+SCROLL_SPEED=1
+SCROLL_SEP=" ... "
+SCROLL_ENABLED=1
+QUIET=0
+FORCE_PLAYER=""
+ICON_PREV=$'\uf04a'
+ICON_PLAY=$'\uf04b'
+ICON_PAUSE=$'\uf04c'
+ICON_NEXT=$'\uf04e'
+
+# State directory
+STATE_DIR="${XDG_RUNTIME_DIR:-/tmp/polybar-player-$(id -u)}/polybar-player"
+
+# Self path for polybar click actions
+SELF="$(readlink -f "$0")"
+
+usage() {
+    cat <<'EOF'
+Usage: polybar-player [OPTIONS]
+
+Display options:
+  -f, --format FORMAT        Output format (default: {prev} {icon} {artist}: {title} {play_pause} {next})
+  -l, --max-length N         Max display length for scrolling text (default: 30)
+  -s, --scroll-speed N       Characters per tick (default: 1)
+  --scroll-separator STR     Wrap separator (default: " ... ")
+  --no-scroll                Disable scrolling, truncate instead
+  -q, --quiet                No output when paused
+  --icons PREV PLAY PAUSE NEXT  Override icons
+  --player NAME              Force specific player
+
+Actions:
+  --play-pause               Toggle play/pause
+  --next                     Next track
+  --prev                     Previous track
+  --select                   Open player selector
+  -h, --help                 Show this help
+  --version                  Show version
+EOF
+}
+
+parse_args() {
+    local action=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--format)       FORMAT="$2"; shift 2 ;;
+            -l|--max-length)   MAX_LENGTH="$2"; shift 2 ;;
+            -s|--scroll-speed) SCROLL_SPEED="$2"; shift 2 ;;
+            --scroll-separator) SCROLL_SEP="$2"; shift 2 ;;
+            --no-scroll)       SCROLL_ENABLED=0; shift ;;
+            -q|--quiet)        QUIET=1; shift ;;
+            --player)          FORCE_PLAYER="$2"; shift 2 ;;
+            --icons)           ICON_PREV="$2"; ICON_PLAY="$3"; ICON_PAUSE="$4"; ICON_NEXT="$5"; shift 5 ;;
+            --play-pause)      action="play_pause"; shift ;;
+            --next)            action="next"; shift ;;
+            --prev)            action="prev"; shift ;;
+            --select)          action="select"; shift ;;
+            -h|--help)         usage; exit 0 ;;
+            --version)         echo "polybar-player $VERSION"; exit 0 ;;
+            *)                 echo "polybar-player: unknown option: $1" >&2; exit 1 ;;
+        esac
+    done
+
+    case "$action" in
+        play_pause|next|prev) player_action "$action"; exit 0 ;;
+        select)               select_player; exit 0 ;;
+        "")                   display_output ;;
+    esac
+}
+
+# Stubs — implemented in subsequent tasks
+player_action()  { echo "not implemented" >&2; exit 1; }
+select_player()  { echo "not implemented" >&2; exit 1; }
+display_output() { echo "not implemented" >&2; exit 1; }
+
+parse_args "$@"

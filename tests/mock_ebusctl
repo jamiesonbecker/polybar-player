@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Mock ebusctl for testing polybar-player.
+set -euo pipefail
+
+: "${MOCK_PLAYERS:=org.mpris.MediaPlayer2.spotify
+org.mpris.MediaPlayer2.firefox.instance_1234}"
+: "${MOCK_STATUS:=Playing}"
+: "${MOCK_TITLE:=Never Gonna Give You Up}"
+: "${MOCK_ARTIST:=Rick Astley}"
+: "${MOCK_ALBUM:=Whenever You Need Somebody}"
+: "${MOCK_CAN_NEXT:=true}"
+: "${MOCK_CAN_PREV:=true}"
+
+case "${1:-}" in
+    list)
+        printf '%s\n' "org.freedesktop.DBus"
+        printf '%s\n' "org.freedesktop.Notifications"
+        while IFS= read -r p; do
+            [[ -n "$p" ]] && printf '%s\n' "$p"
+        done <<< "$MOCK_PLAYERS"
+        ;;
+    get-property)
+        prop="${5:-}"
+        case "$prop" in
+            PlaybackStatus) printf 's "%s"\n' "$MOCK_STATUS" ;;
+            Metadata)
+                printf '"%s" s "%s"\n' "xesam:title" "$MOCK_TITLE"
+                printf '"%s" as 1 "%s"\n' "xesam:artist" "$MOCK_ARTIST"
+                printf '"%s" s "%s"\n' "xesam:album" "$MOCK_ALBUM"
+                printf '"%s" x 213000000\n' "mpris:length"
+                ;;
+            CanGoNext)     printf 'b %s\n' "$MOCK_CAN_NEXT" ;;
+            CanGoPrevious) printf 'b %s\n' "$MOCK_CAN_PREV" ;;
+            *)             printf 's "unknown"\n' ;;
+        esac
+        ;;
+    call)
+        # Actions are silent
+        ;;
+esac
