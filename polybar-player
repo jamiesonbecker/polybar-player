@@ -325,9 +325,81 @@ format_output() {
     printf '%s\n' "$output"
 }
 
-# Stubs — implemented in subsequent tasks
-player_action()  { echo "not implemented" >&2; exit 1; }
-select_player()  { echo "not implemented" >&2; exit 1; }
+# player_action ACTION — send a command to the active player
+player_action() {
+    local action="$1"
+    local service
+    service=$(active_player) || exit 0
+
+    local method
+    case "$action" in
+        play_pause) method="PlayPause" ;;
+        next)       method="Next" ;;
+        prev)       method="Previous" ;;
+        *)          echo "polybar-player: unknown action: $action" >&2; exit 1 ;;
+    esac
+
+    "$DBUS_CLI" call "$service" /org/mpris/MediaPlayer2 \
+        org.mpris.MediaPlayer2.Player "$method" 2>/dev/null || true
+}
+
+# select_player — present a menu to choose the active player
+select_player() {
+    local players
+    players=$(discover_players)
+    [[ -z "$players" ]] && exit 0
+
+    local count
+    count=$(printf '%s\n' "$players" | wc -l)
+
+    # If only one player, just select it
+    if [[ "$count" -eq 1 ]]; then
+        set_active "$players"
+        return 0
+    fi
+
+    # Build display names: org.mpris.MediaPlayer2.spotify -> spotify
+    local display_names=""
+    local -a services=()
+    while IFS= read -r svc; do
+        services+=("$svc")
+        local name="${svc##*MediaPlayer2.}"
+        display_names+="$name"$'\n'
+    done <<< "$players"
+
+    local selected=""
+    if command -v rofi &>/dev/null; then
+        selected=$(printf '%s' "$display_names" | rofi -dmenu -p "Player" -i 2>/dev/null) || return 0
+    elif command -v dmenu &>/dev/null; then
+        selected=$(printf '%s' "$display_names" | dmenu -p "Player:" 2>/dev/null) || return 0
+    else
+        # Click-cycle: advance to next player
+        local current
+        current=$(active_player) || return 0
+        local found=0
+        local first=""
+        while IFS= read -r svc; do
+            [[ -z "$first" ]] && first="$svc"
+            if [[ "$found" -eq 1 ]]; then
+                set_active "$svc"
+                return 0
+            fi
+            [[ "$svc" == "$current" ]] && found=1
+        done <<< "$players"
+        # Wrap around to first
+        set_active "$first"
+        return 0
+    fi
+
+    # Match display name back to service
+    while IFS= read -r svc; do
+        local name="${svc##*MediaPlayer2.}"
+        if [[ "$name" == "$selected" ]]; then
+            set_active "$svc"
+            return 0
+        fi
+    done <<< "$players"
+}
 
 display_output() {
     local service
