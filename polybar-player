@@ -4,9 +4,8 @@ set -euo pipefail
 
 VERSION="0.1.0"
 
-# Detect D-Bus CLI tool: ebusctl (shim) > busctl (systemd)
-# Prefer ebusctl — its output format is guaranteed compatible.
-# busctl (systemd) has different output formatting that may not parse correctly.
+# Detect D-Bus CLI tool: ebusctl > busctl
+# Prefer ebusctl — it's what we test against.
 DBUS_CLI=""
 if command -v ebusctl &>/dev/null; then
     DBUS_CLI="ebusctl"
