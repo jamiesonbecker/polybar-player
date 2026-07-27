@@ -10,7 +10,7 @@ Written in pure bash. No Python, no Node, no runtime dependencies.
 
 **Required:**
 - `bash` (>= 4.0)
-- `busctl` or [`ebusctl`](https://github.com/user/ebusctl) — D-Bus CLI tool
+- `busctl` or [`ebusctl`](https://github.com/jamiesonbecker/ebusctl) — D-Bus CLI tool
 
 **Optional (for player selection menu):**
 - `rofi` (preferred) or `dmenu`
